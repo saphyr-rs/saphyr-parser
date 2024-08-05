@@ -177,45 +177,34 @@ impl<'a> Input for StrInput<'a> {
     fn skip_ws_to_eol(&mut self, skip_tabs: SkipTabs) -> (usize, Result<SkipTabs, &'static str>) {
         assert!(!matches!(skip_tabs, SkipTabs::Result(..)));
 
-        let mut new_str = self.buffer.as_bytes();
+        let mut new_str = self.buffer;
         let mut has_yaml_ws = false;
         let mut encountered_tab = false;
 
         // This ugly pair of loops is the fastest way of trimming spaces (and maybe tabs) I found
         // while keeping track of whether we encountered spaces and/or tabs.
         if skip_tabs == SkipTabs::Yes {
-            let mut i = 0;
-            while i < new_str.len() {
-                if new_str[i] == b' ' {
+            loop {
+                if let Some(sub_str) = new_str.strip_prefix(' ') {
                     has_yaml_ws = true;
-                } else if new_str[i] == b'\t' {
+                    new_str = sub_str;
+                } else if let Some(sub_str) = new_str.strip_prefix('\t') {
                     encountered_tab = true;
+                    new_str = sub_str;
                 } else {
                     break;
                 }
-                i += 1;
             }
-            new_str = &new_str[i..];
         } else {
-            let mut i = 0;
-            while i < new_str.len() {
-                if new_str[i] != b' ' {
-                    break;
-                }
-                i += 1;
+            while let Some(sub_str) = new_str.strip_prefix(' ') {
+                has_yaml_ws = true;
+                new_str = sub_str;
             }
-            has_yaml_ws = i != 0;
-            new_str = &new_str[i..];
         }
 
         // All characters consumed were ascii. We can use the byte length difference to count the
         // number of whitespace ignored.
         let mut chars_consumed = self.buffer.len() - new_str.len();
-        // SAFETY: We only trimmed spaces and tabs, both of which are bytes. This means we won't
-        // start the string outside of a valid UTF-8 boundary.
-        // It is assumed the input string is valid UTF-8, so the rest of the string is assumed to
-        // be valid UTF-8 as well.
-        let mut new_str = unsafe { std::str::from_utf8_unchecked(new_str) };
 
         if !new_str.is_empty() && new_str.as_bytes()[0] == b'#' {
             if !encountered_tab && !has_yaml_ws {
