@@ -214,24 +214,14 @@ impl<'a> Input for StrInput<'a> {
                 );
             }
 
-            let mut chars = new_str.chars();
-            let mut found_breakz = false;
-            // Iterate over all remaining chars until we hit a breakz.
-            for c in chars.by_ref() {
+            // Skip remaining characters until we hit a breakz.
+            while let Some((c, sub_str)) = split_first_char(new_str) {
                 if is_breakz(c) {
-                    found_breakz = true;
                     break;
                 }
+                new_str = sub_str;
                 chars_consumed += 1;
             }
-
-            new_str = if found_breakz {
-                // SAFETY: The last character we pulled out of the `chars()` is a breakz, one of
-                // '\0', '\r', '\n'. All 3 of them are 1-byte long.
-                unsafe { extend_left(chars.as_str(), 1) }
-            } else {
-                chars.as_str()
-            };
         }
 
         self.buffer = new_str;
@@ -314,27 +304,19 @@ impl<'a> Input for StrInput<'a> {
     }
 
     fn skip_while_non_breakz(&mut self) -> usize {
-        let mut found_breakz = false;
+        let mut new_str = self.buffer;
         let mut count = 0;
 
         // Skip over all non-breaks.
-        let mut chars = self.buffer.chars();
-        for c in chars.by_ref() {
+        while let Some((c, sub_str)) = split_first_char(new_str) {
             if is_breakz(c) {
-                found_breakz = true;
                 break;
             }
+            new_str = sub_str;
             count += 1;
         }
 
-        self.buffer = if found_breakz {
-            // If we read a breakz, we need to put it back to the buffer.
-            // SAFETY: The last character we extracted is either a '\n', '\r' or '\0', all of which
-            // are 1-byte long.
-            unsafe { extend_left(chars.as_str(), 1) }
-        } else {
-            chars.as_str()
-        };
+        self.buffer = new_str;
 
         count
     }
@@ -434,6 +416,15 @@ unsafe fn extend_left(s: &str, n: usize) -> &str {
         s.as_ptr().wrapping_sub(n),
         s.len() + n,
     ))
+}
+
+/// Splits the first character of the given string and returns it along with the rest of the
+/// string.
+#[inline]
+fn split_first_char(s: &str) -> Option<(char, &str)> {
+    let mut chars = s.chars();
+    let c = chars.next()?;
+    Some((c, chars.as_str()))
 }
 
 #[cfg(test)]
