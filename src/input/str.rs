@@ -61,10 +61,17 @@ impl<'a> Input for StrInput<'a> {
     }
 
     #[inline]
-    fn push_back(&mut self, c: char) {
-        // SAFETY: The preconditions of this function is that the character we are given is the one
-        // immediately preceding `self.buffer`.
-        self.buffer = unsafe { put_back_in_str(self.buffer, c) };
+    fn raw_read_non_breakz_ch(&mut self) -> Option<char> {
+        if let Some((c, sub_str)) = split_first_char(self.buffer) {
+            if is_breakz(c) {
+                None
+            } else {
+                self.buffer = sub_str;
+                Some(c)
+            }
+        } else {
+            None
+        }
     }
 
     #[inline]
@@ -387,37 +394,6 @@ impl<'a> Input for StrInput<'a> {
 /// [`buflen`]: `StrInput::buflen`
 const BUFFER_LEN: usize = 128;
 
-/// Fake prepending a character to the given string.
-///
-/// The character given as parameter MUST be the one that precedes the given string.
-///
-/// # Exmaple
-/// ```ignore
-/// let s1 = "foo";
-/// let s2 = &s1[1..];
-/// let s3 = put_back_in_str(s2, 'f'); // OK, 'f' is the character immediately preceding
-/// // let s3 = put_back_in_str('g'); // Not allowed
-/// assert_eq!(s1, s3);
-/// assert_eq!(s1.as_ptr(), s3.as_ptr());
-/// ```
-unsafe fn put_back_in_str(s: &str, c: char) -> &str {
-    let n_bytes = c.len_utf8();
-
-    // SAFETY: The character that gets pushed back is guaranteed to be the one that is
-    // immediately preceding our buffer. We can compute the length of the character and move
-    // our buffer back that many bytes.
-    extend_left(s, n_bytes)
-}
-
-/// Extend the string by moving the start pointer to the left by `n` bytes.
-#[inline]
-unsafe fn extend_left(s: &str, n: usize) -> &str {
-    std::str::from_utf8_unchecked(std::slice::from_raw_parts(
-        s.as_ptr().wrapping_sub(n),
-        s.len() + n,
-    ))
-}
-
 /// Splits the first character of the given string and returns it along with the rest of the
 /// string.
 #[inline]
@@ -429,7 +405,7 @@ fn split_first_char(s: &str) -> Option<(char, &str)> {
 
 #[cfg(test)]
 mod test {
-    use crate::input::{str::put_back_in_str, Input};
+    use crate::input::Input;
 
     use super::StrInput;
 
@@ -463,14 +439,5 @@ mod test {
         let input = StrInput::new("... ");
         assert!(input.next_is_document_end());
         assert!(input.next_is_document_indicator());
-    }
-
-    #[test]
-    pub fn put_back_in_str_example() {
-        let s1 = "foo";
-        let s2 = &s1[1..];
-        let s3 = unsafe { put_back_in_str(s2, 'f') }; // OK, 'f' is the character immediately preceding
-        assert_eq!(s1, s3);
-        assert_eq!(s1.as_ptr(), s3.as_ptr());
     }
 }
