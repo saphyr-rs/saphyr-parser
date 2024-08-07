@@ -13,8 +13,8 @@ use std::{char, collections::VecDeque, error::Error, fmt};
 
 use crate::{
     char_traits::{
-        as_hex, is_anchor_char, is_blank, is_blank_or_breakz, is_break, is_breakz, is_flow, is_hex,
-        is_tag_char, is_uri_char,
+        as_hex, is_alpha, is_anchor_char, is_blank, is_blank_or_breakz, is_break, is_breakz,
+        is_flow, is_hex, is_tag_char, is_uri_char,
     },
     input::Input,
 };
@@ -1046,7 +1046,7 @@ impl<T: Input> Scanner<T> {
         let start_mark = self.mark;
         let mut string = String::new();
 
-        let n_chars = self.input.fetch_while_is_alpha(&mut string);
+        let n_chars = self.input.read_until(&mut string, |c| !is_alpha(c));
         self.mark.index += n_chars;
         self.mark.col += n_chars;
 
@@ -1182,7 +1182,7 @@ impl<T: Input> Scanner<T> {
         string.push(self.input.peek());
         self.skip_non_blank();
 
-        let n_chars = self.input.fetch_while_is_alpha(&mut string);
+        let n_chars = self.input.read_until(&mut string, |c| !is_alpha(c));
         self.mark.index += n_chars;
         self.mark.col += n_chars;
 

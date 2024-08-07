@@ -334,21 +334,4 @@ pub trait Input {
     fn next_is_alpha(&self) -> bool {
         is_alpha(self.peek())
     }
-
-    /// Fetch characters from the input while we encounter letters and store them in `out`.
-    ///
-    /// The characters are consumed from the input.
-    ///
-    /// # Return
-    /// Return the number of characters that were consumed. The number of characters returned can
-    /// be used to advance the index and column, since no end-of-line character will be consumed.
-    fn fetch_while_is_alpha(&mut self, out: &mut String) -> usize {
-        let mut n_chars = 0;
-        while is_alpha(self.look_ch()) {
-            n_chars += 1;
-            out.push(self.peek());
-            self.skip();
-        }
-        n_chars
-    }
 }

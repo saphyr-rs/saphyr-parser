@@ -291,34 +291,6 @@ impl<'a> Input for StrInput<'a> {
     fn next_is_alpha(&self) -> bool {
         !self.buffer.is_empty() && is_alpha(self.buffer.as_bytes()[0] as char)
     }
-
-    fn fetch_while_is_alpha(&mut self, out: &mut String) -> usize {
-        let mut not_alpha = None;
-
-        // Skip while we have alpha characters.
-        let mut chars = self.buffer.chars();
-        for c in chars.by_ref() {
-            if !is_alpha(c) {
-                not_alpha = Some(c);
-                break;
-            }
-        }
-
-        let remaining_string = if let Some(c) = not_alpha {
-            let n_bytes_read = chars.as_str().as_ptr() as usize - self.buffer.as_ptr() as usize;
-            let last_char_bytes = c.len_utf8();
-            &self.buffer[n_bytes_read - last_char_bytes..]
-        } else {
-            chars.as_str()
-        };
-
-        let n_bytes_to_append = remaining_string.as_ptr() as usize - self.buffer.as_ptr() as usize;
-        out.reserve(n_bytes_to_append);
-        out.push_str(&self.buffer[..n_bytes_to_append]);
-        self.buffer = remaining_string;
-
-        n_bytes_to_append
-    }
 }
 
 /// The buffer size we return to the scanner.
