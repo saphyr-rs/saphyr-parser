@@ -49,22 +49,27 @@ impl<'a> Input for StrInput<'a> {
         self.buflen() == 0
     }
 
-    #[inline]
-    fn raw_read_ch(&mut self) -> char {
-        let mut chars = self.buffer.chars();
-        if let Some(c) = chars.next() {
-            self.buffer = chars.as_str();
-            c
-        } else {
-            '\0'
-        }
-    }
+    fn read_until<F>(&mut self, out: &mut String, mut f: F) -> usize
+    where
+        F: FnMut(char) -> bool,
+    {
+        let mut char_count = 0usize;
+        let mut new_str = self.buffer;
 
-    #[inline]
-    fn push_back(&mut self, c: char) {
-        // SAFETY: The preconditions of this function is that the character we are given is the one
-        // immediately preceding `self.buffer`.
-        self.buffer = unsafe { put_back_in_str(self.buffer, c) };
+        while let Some((c, sub_str)) = split_first_char(new_str) {
+            if f(c) {
+                break;
+            }
+            new_str = sub_str;
+            char_count += 1;
+        }
+
+        let byte_count = self.buffer.len() - new_str.len();
+        out.push_str(&self.buffer[..byte_count]);
+
+        self.buffer = new_str;
+
+        char_count
     }
 
     #[inline]
@@ -416,28 +421,6 @@ impl<'a> Input for StrInput<'a> {
 /// [`buflen`]: `StrInput::buflen`
 const BUFFER_LEN: usize = 128;
 
-/// Fake prepending a character to the given string.
-///
-/// The character given as parameter MUST be the one that precedes the given string.
-///
-/// # Exmaple
-/// ```ignore
-/// let s1 = "foo";
-/// let s2 = &s1[1..];
-/// let s3 = put_back_in_str(s2, 'f'); // OK, 'f' is the character immediately preceding
-/// // let s3 = put_back_in_str('g'); // Not allowed
-/// assert_eq!(s1, s3);
-/// assert_eq!(s1.as_ptr(), s3.as_ptr());
-/// ```
-unsafe fn put_back_in_str(s: &str, c: char) -> &str {
-    let n_bytes = c.len_utf8();
-
-    // SAFETY: The character that gets pushed back is guaranteed to be the one that is
-    // immediately preceding our buffer. We can compute the length of the character and move
-    // our buffer back that many bytes.
-    extend_left(s, n_bytes)
-}
-
 /// Extend the string by moving the start pointer to the left by `n` bytes.
 #[inline]
 unsafe fn extend_left(s: &str, n: usize) -> &str {
@@ -447,9 +430,18 @@ unsafe fn extend_left(s: &str, n: usize) -> &str {
     ))
 }
 
+/// Splits the first character of the given string and returns it along with the rest of the
+/// string.
+#[inline]
+fn split_first_char(s: &str) -> Option<(char, &str)> {
+    let mut iter = s.chars();
+    let c = iter.next()?;
+    Some((c, iter.as_str()))
+}
+
 #[cfg(test)]
 mod test {
-    use crate::input::{str::put_back_in_str, Input};
+    use crate::input::Input;
 
     use super::StrInput;
 
@@ -483,14 +475,5 @@ mod test {
         let input = StrInput::new("... ");
         assert!(input.next_is_document_end());
         assert!(input.next_is_document_indicator());
-    }
-
-    #[test]
-    pub fn put_back_in_str_example() {
-        let s1 = "foo";
-        let s2 = &s1[1..];
-        let s3 = unsafe { put_back_in_str(s2, 'f') }; // OK, 'f' is the character immediately preceding
-        assert_eq!(s1, s3);
-        assert_eq!(s1.as_ptr(), s3.as_ptr());
     }
 }

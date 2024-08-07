@@ -43,18 +43,14 @@ pub trait Input {
         self.buflen() == 0
     }
 
-    /// Read a character from the input stream and return it directly.
+    /// Reads characters into `out` until `f` returns `true` or the end of input is reached.
     ///
-    /// The internal buffer (is any) is bypassed.
-    #[must_use]
-    fn raw_read_ch(&mut self) -> char;
-
-    /// Put a character back in the buffer.
+    /// The character that caused `f` to return `true` is not consumed or placed into `out`.
     ///
-    /// This function is only called when we read one too many characters and the pushed back
-    /// character is exactly the last character that was read. This function will not be called
-    /// multiple times consecutively.
-    fn push_back(&mut self, c: char);
+    /// Returns the number of read characters.
+    fn read_until<F>(&mut self, out: &mut String, f: F) -> usize
+    where
+        F: FnMut(char) -> bool;
 
     /// Consume the next character.
     fn skip(&mut self);

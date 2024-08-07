@@ -1679,7 +1679,6 @@ impl<T: Input> Scanner<T> {
             ));
         }
 
-        let mut line_buffer = String::with_capacity(100);
         let start_mark = self.mark;
         while self.mark.col == indent && !self.input.next_is_z() {
             if indent == 0 {
@@ -1706,7 +1705,7 @@ impl<T: Input> Scanner<T> {
 
             leading_blank = self.input.next_is_blank();
 
-            self.scan_block_scalar_content_line(&mut string, &mut line_buffer);
+            self.scan_block_scalar_content_line(&mut string);
 
             // break on EOF
             if self.input.next_is_z() {
@@ -1750,47 +1749,12 @@ impl<T: Input> Scanner<T> {
     ///
     /// This function assumed the first character to read is the first content character in the
     /// line. This function does not consume the line break character(s) after the line.
-    fn scan_block_scalar_content_line(&mut self, string: &mut String, line_buffer: &mut String) {
-        // Start by evaluating characters in the buffer.
-        while !self.input.buf_is_empty() && !self.input.next_is_breakz() {
-            string.push(self.input.peek());
-            // We may technically skip non-blank characters. However, the only distinction is
-            // to determine what is leading whitespace and what is not. Here, we read the
-            // contents of the line until either eof or a linebreak. We know we will not read
-            // `self.leading_whitespace` until the end of the line, where it will be reset.
-            // This allows us to call a slightly less expensive function.
-            self.skip_blank();
-        }
+    fn scan_block_scalar_content_line(&mut self, string: &mut String) {
+        let num_chars = self.input.read_until(string, is_breakz);
 
-        // All characters that were in the buffer were consumed. We need to check if more
-        // follow.
-        if self.input.buf_is_empty() {
-            // We will read all consecutive non-breakz characters. We push them into a
-            // temporary buffer. The main difference with going through `self.buffer` is that
-            // characters are appended here as their real size (1B for ascii, or up to 4 bytes for
-            // UTF-8). We can then use the internal `line_buffer` `Vec` to push data into `string`
-            // (using `String::push_str`).
-            let mut c = self.input.raw_read_ch();
-            while !is_breakz(c) {
-                line_buffer.push(c);
-                c = self.input.raw_read_ch();
-            }
-
-            // Our last character read is stored in `c`. It is either an EOF or a break. In any
-            // case, we need to push it back into `self.buffer` so it may be properly read
-            // after. We must not insert it in `string`.
-            self.input.push_back(c);
-
-            // We need to manually update our position; we haven't called a `skip` function.
-            self.mark.col += line_buffer.len();
-            self.mark.index += line_buffer.len();
-
-            // We can now append our bytes to our `string`.
-            string.reserve(line_buffer.as_bytes().len());
-            string.push_str(line_buffer);
-            // This clears the _contents_ without touching the _capacity_.
-            line_buffer.clear();
-        }
+        // We need to manually update our position; we haven't called a `skip` function.
+        self.mark.col += num_chars;
+        self.mark.index += num_chars;
     }
 
     /// Skip the block scalar indentation and empty lines.
