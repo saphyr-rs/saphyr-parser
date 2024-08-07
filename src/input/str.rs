@@ -2,7 +2,7 @@ use crate::{
     char_traits::{
         is_alpha, is_blank, is_blank_or_breakz, is_break, is_breakz, is_digit, is_flow, is_z,
     },
-    input::{Input, SkipTabs},
+    input::Input,
 };
 
 #[allow(clippy::module_name_repetitions)]
@@ -47,6 +47,48 @@ impl<'a> Input for StrInput<'a> {
 
     fn buf_is_empty(&self) -> bool {
         self.buflen() == 0
+    }
+
+    fn skip_until<F>(&mut self, mut f: F) -> usize
+    where
+        F: FnMut(char) -> bool,
+    {
+        let mut char_count = 0usize;
+        let mut new_str = self.buffer;
+
+        while let Some((c, sub_str)) = split_first_char(new_str) {
+            if f(c) {
+                break;
+            }
+            new_str = sub_str;
+            char_count += 1;
+        }
+
+        self.buffer = new_str;
+
+        char_count
+    }
+
+    fn skip_ascii_until<F>(&mut self, mut f: F) -> usize
+    where
+        F: FnMut(char) -> bool,
+    {
+        let mut new_str = self.buffer.as_bytes();
+
+        while let Some((&c, sub_str)) = new_str.split_first() {
+            if f(c.into()) {
+                break;
+            }
+            debug_assert!(c.is_ascii());
+            new_str = sub_str;
+        }
+
+        // Since all skipped characters are ascii, the number of characters is equal to the number
+        // of bytes.
+        let char_count = self.buffer.len() - new_str.len();
+        self.buffer = &self.buffer[char_count..];
+
+        char_count
     }
 
     fn read_until<F>(&mut self, out: &mut String, mut f: F) -> usize
@@ -177,85 +219,6 @@ impl<'a> Input for StrInput<'a> {
                 && bytes[1] == b'.'
                 && bytes[2] == b'.'
         }
-    }
-
-    fn skip_ws_to_eol(&mut self, skip_tabs: SkipTabs) -> (usize, Result<SkipTabs, &'static str>) {
-        assert!(!matches!(skip_tabs, SkipTabs::Result(..)));
-
-        let mut new_str = self.buffer.as_bytes();
-        let mut has_yaml_ws = false;
-        let mut encountered_tab = false;
-
-        // This ugly pair of loops is the fastest way of trimming spaces (and maybe tabs) I found
-        // while keeping track of whether we encountered spaces and/or tabs.
-        if skip_tabs == SkipTabs::Yes {
-            let mut i = 0;
-            while i < new_str.len() {
-                if new_str[i] == b' ' {
-                    has_yaml_ws = true;
-                } else if new_str[i] == b'\t' {
-                    encountered_tab = true;
-                } else {
-                    break;
-                }
-                i += 1;
-            }
-            new_str = &new_str[i..];
-        } else {
-            let mut i = 0;
-            while i < new_str.len() {
-                if new_str[i] != b' ' {
-                    break;
-                }
-                i += 1;
-            }
-            has_yaml_ws = i != 0;
-            new_str = &new_str[i..];
-        }
-
-        // All characters consumed were ascii. We can use the byte length difference to count the
-        // number of whitespace ignored.
-        let mut chars_consumed = self.buffer.len() - new_str.len();
-        // SAFETY: We only trimmed spaces and tabs, both of which are bytes. This means we won't
-        // start the string outside of a valid UTF-8 boundary.
-        // It is assumed the input string is valid UTF-8, so the rest of the string is assumed to
-        // be valid UTF-8 as well.
-        let mut new_str = unsafe { std::str::from_utf8_unchecked(new_str) };
-
-        if !new_str.is_empty() && new_str.as_bytes()[0] == b'#' {
-            if !encountered_tab && !has_yaml_ws {
-                return (
-                    chars_consumed,
-                    Err("comments must be separated from other tokens by whitespace"),
-                );
-            }
-
-            let mut chars = new_str.chars();
-            let mut found_breakz = false;
-            // Iterate over all remaining chars until we hit a breakz.
-            for c in chars.by_ref() {
-                if is_breakz(c) {
-                    found_breakz = true;
-                    break;
-                }
-                chars_consumed += 1;
-            }
-
-            new_str = if found_breakz {
-                // SAFETY: The last character we pulled out of the `chars()` is a breakz, one of
-                // '\0', '\r', '\n'. All 3 of them are 1-byte long.
-                unsafe { extend_left(chars.as_str(), 1) }
-            } else {
-                chars.as_str()
-            };
-        }
-
-        self.buffer = new_str;
-
-        (
-            chars_consumed,
-            Ok(SkipTabs::Result(encountered_tab, has_yaml_ws)),
-        )
     }
 
     #[allow(clippy::inline_always)]

@@ -1,4 +1,3 @@
-use crate::char_traits::is_breakz;
 use crate::input::Input;
 
 use arraydeque::ArrayDeque;
@@ -61,6 +60,34 @@ impl<T: Iterator<Item = char>> Input for BufferedInput<T> {
     #[inline]
     fn bufmaxlen(&self) -> usize {
         BUFFER_LEN
+    }
+
+    fn skip_until<F>(&mut self, mut f: F) -> usize
+    where
+        F: FnMut(char) -> bool,
+    {
+        let mut char_count = 0;
+
+        for &c in &self.buffer {
+            if f(c) {
+                break;
+            }
+            char_count += 1;
+        }
+
+        self.buffer.drain(0..char_count);
+
+        if self.buffer.is_empty() {
+            for c in self.input.by_ref() {
+                if f(c) {
+                    self.buffer.push_back(c).unwrap();
+                    break;
+                }
+                char_count += 1;
+            }
+        }
+
+        char_count
     }
 
     fn read_until<F>(&mut self, out: &mut String, mut f: F) -> usize

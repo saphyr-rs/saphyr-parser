@@ -16,7 +16,7 @@ use crate::{
         as_hex, is_anchor_char, is_blank_or_breakz, is_break, is_breakz, is_flow, is_hex,
         is_tag_char, is_uri_char,
     },
-    input::{Input, SkipTabs},
+    input::Input,
 };
 
 /// The encoding of the input. Currently, only UTF-8 is supported.
@@ -894,10 +894,41 @@ impl<T: Input> Scanner<T> {
     }
 
     fn skip_ws_to_eol(&mut self, skip_tabs: SkipTabs) -> Result<SkipTabs, ScanError> {
-        let (n_bytes, result) = self.input.skip_ws_to_eol(skip_tabs);
-        self.mark.col += n_bytes;
-        self.mark.index += n_bytes;
-        result.map_err(|msg| ScanError::new_str(self.mark, msg))
+        let mut encountered_ws = false;
+        let mut encountered_tab = false;
+        let mut encountered_hash = false;
+        let num_chars = self.input.skip_ascii_until(|c| match c {
+            ' ' => {
+                encountered_ws = true;
+                false
+            }
+            '\t' if skip_tabs != SkipTabs::No => {
+                encountered_tab = true;
+                false
+            }
+            '#' => {
+                encountered_hash = true;
+                true
+            }
+            _ => true,
+        });
+
+        self.mark.index += num_chars;
+        self.mark.col += num_chars;
+
+        if encountered_hash {
+            if !encountered_ws && !encountered_tab {
+                return Err(ScanError::new_str(
+                    self.mark,
+                    "comments must be separated from other tokens by whitespace",
+                ));
+            }
+            let num_chars = self.input.skip_until(is_breakz);
+            self.mark.index += num_chars;
+            self.mark.col += num_chars;
+        }
+
+        Ok(SkipTabs::Result(encountered_tab, encountered_ws))
     }
 
     fn fetch_stream_start(&mut self) {
@@ -2565,6 +2596,40 @@ pub enum Chomping {
     Clip,
     /// The final line break and trailing empty lines are included.
     Keep,
+}
+
+/// Behavior to adopt regarding treating tabs as whitespace.
+///
+/// Although tab is a valid yaml whitespace, it doesn't always behave the same as a space.
+#[derive(Copy, Clone, Eq, PartialEq)]
+enum SkipTabs {
+    /// Skip all tabs as whitespace.
+    Yes,
+    /// Don't skip any tab. Return from the function when encountering one.
+    No,
+    /// Return value from the function.
+    Result(
+        /// Whether tabs were encountered.
+        bool,
+        /// Whether at least 1 valid yaml whitespace has been encountered.
+        bool,
+    ),
+}
+
+impl SkipTabs {
+    /// Whether tabs were found while skipping whitespace.
+    ///
+    /// This function must be called after a call to `skip_ws_to_eol`.
+    fn found_tabs(self) -> bool {
+        matches!(self, SkipTabs::Result(true, _))
+    }
+
+    /// Whether a valid YAML whitespace has been found in skipped-over content.
+    ///
+    /// This function must be called after a call to `skip_ws_to_eol`.
+    fn has_valid_yaml_ws(self) -> bool {
+        matches!(self, SkipTabs::Result(_, true))
+    }
 }
 
 #[cfg(test)]
