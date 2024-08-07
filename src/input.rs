@@ -56,8 +56,8 @@ pub trait Input {
     ///
     /// The character that caused `f` to return `true` is not skipped.
     ///
-    /// When `f` receives a non-ascii character, it must return `true`. The non-ascii might not be
-    /// the actual character found in the input (e.g., it might be an UTF-8 byte cast to `char`).
+    /// When `f` receives a non-ASCII character, it must return `true`. The non-ASCII might not be
+    /// the actual character found in the input (e.g., it might be an UTF-8 byte casted to `char`).
     ///
     /// Returns the number of skipped characters.
     fn skip_ascii_until<F>(&mut self, mut f: F) -> usize
@@ -333,43 +333,6 @@ pub trait Input {
     #[inline]
     fn next_is_alpha(&self) -> bool {
         is_alpha(self.peek())
-    }
-
-    /// Skip characters from the input until a [breakz] is found.
-    ///
-    /// The characters are consumed from the input.
-    ///
-    /// # Return
-    /// Return the number of characters that were consumed. The number of characters returned can
-    /// be used to advance the index and column, since no end-of-line character will be consumed.
-    ///
-    /// [breakz]: is_breakz
-    #[inline]
-    fn skip_while_non_breakz(&mut self) -> usize {
-        let mut count = 0;
-        while !is_breakz(self.look_ch()) {
-            count += 1;
-            self.skip();
-        }
-        count
-    }
-
-    /// Skip characters from the input while [blanks] are found.
-    ///
-    /// The characters are consumed from the input.
-    ///
-    /// # Return
-    /// Return the number of characters that were consumed. The number of characters returned can
-    /// be used to advance the index and column, since no end-of-line character will be consumed.
-    ///
-    /// [blanks]: is_blank
-    fn skip_while_blank(&mut self) -> usize {
-        let mut n_chars = 0;
-        while is_blank(self.look_ch()) {
-            n_chars += 1;
-            self.skip();
-        }
-        n_chars
     }
 
     /// Fetch characters from the input while we encounter letters and store them in `out`.

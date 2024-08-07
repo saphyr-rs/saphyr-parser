@@ -13,7 +13,7 @@ use std::{char, collections::VecDeque, error::Error, fmt};
 
 use crate::{
     char_traits::{
-        as_hex, is_anchor_char, is_blank_or_breakz, is_break, is_breakz, is_flow, is_hex,
+        as_hex, is_anchor_char, is_blank, is_blank_or_breakz, is_break, is_breakz, is_flow, is_hex,
         is_tag_char, is_uri_char,
     },
     input::Input,
@@ -576,6 +576,18 @@ impl<T: Input> Scanner<T> {
         }
     }
 
+    fn skip_while_blank(&mut self) {
+        let n_chars = self.input.skip_ascii_until(|c| !is_blank(c));
+        self.mark.index += n_chars;
+        self.mark.col += n_chars;
+    }
+
+    fn skip_while_non_breakz(&mut self) {
+        let n_chars = self.input.skip_until(is_breakz);
+        self.mark.index += n_chars;
+        self.mark.col += n_chars;
+    }
+
     /// Return whether the [`TokenType::StreamStart`] event has been emitted.
     #[inline]
     pub fn stream_started(&self) -> bool {
@@ -846,9 +858,7 @@ impl<T: Input> Scanner<T> {
                     }
                 }
                 '#' => {
-                    let comment_length = self.input.skip_while_non_breakz();
-                    self.mark.index += comment_length;
-                    self.mark.col += comment_length;
+                    self.skip_while_non_breakz();
                 }
                 _ => break,
             }
@@ -878,9 +888,7 @@ impl<T: Input> Scanner<T> {
                     need_whitespace = false;
                 }
                 '#' => {
-                    let comment_length = self.input.skip_while_non_breakz();
-                    self.mark.index += comment_length;
-                    self.mark.col += comment_length;
+                    self.skip_while_non_breakz();
                 }
                 _ => break,
             }
@@ -923,9 +931,7 @@ impl<T: Input> Scanner<T> {
                     "comments must be separated from other tokens by whitespace",
                 ));
             }
-            let num_chars = self.input.skip_until(is_breakz);
-            self.mark.index += num_chars;
-            self.mark.col += num_chars;
+            self.skip_while_non_breakz();
         }
 
         Ok(SkipTabs::Result(encountered_tab, encountered_ws))
@@ -991,9 +997,7 @@ impl<T: Input> Scanner<T> {
             // XXX This should be a warning instead of an error
             _ => {
                 // skip current line
-                let line_len = self.input.skip_while_non_breakz();
-                self.mark.index += line_len;
-                self.mark.col += line_len;
+                self.skip_while_non_breakz();
                 // XXX return an empty TagDirective token
                 Token(
                     Span::new(start_mark, self.mark),
@@ -1019,10 +1023,7 @@ impl<T: Input> Scanner<T> {
     }
 
     fn scan_version_directive_value(&mut self, mark: &Marker) -> Result<Token, ScanError> {
-        let n_blanks = self.input.skip_while_blank();
-        self.mark.index += n_blanks;
-        self.mark.col += n_blanks;
-
+        self.skip_while_blank();
         let major = self.scan_version_directive_number(mark)?;
 
         if self.input.peek() != '.' {
@@ -1092,16 +1093,10 @@ impl<T: Input> Scanner<T> {
     }
 
     fn scan_tag_directive_value(&mut self, mark: &Marker) -> Result<Token, ScanError> {
-        let n_blanks = self.input.skip_while_blank();
-        self.mark.index += n_blanks;
-        self.mark.col += n_blanks;
-
+        self.skip_while_blank();
         let handle = self.scan_tag_handle(true, mark)?;
 
-        let n_blanks = self.input.skip_while_blank();
-        self.mark.index += n_blanks;
-        self.mark.col += n_blanks;
-
+        self.skip_while_blank();
         let prefix = self.scan_tag_prefix(mark)?;
 
         self.input.lookahead(1);

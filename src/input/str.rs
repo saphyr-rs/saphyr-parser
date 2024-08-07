@@ -292,45 +292,6 @@ impl<'a> Input for StrInput<'a> {
         !self.buffer.is_empty() && is_alpha(self.buffer.as_bytes()[0] as char)
     }
 
-    fn skip_while_non_breakz(&mut self) -> usize {
-        let mut found_breakz = false;
-        let mut count = 0;
-
-        // Skip over all non-breaks.
-        let mut chars = self.buffer.chars();
-        for c in chars.by_ref() {
-            if is_breakz(c) {
-                found_breakz = true;
-                break;
-            }
-            count += 1;
-        }
-
-        self.buffer = if found_breakz {
-            // If we read a breakz, we need to put it back to the buffer.
-            // SAFETY: The last character we extracted is either a '\n', '\r' or '\0', all of which
-            // are 1-byte long.
-            unsafe { extend_left(chars.as_str(), 1) }
-        } else {
-            chars.as_str()
-        };
-
-        count
-    }
-
-    fn skip_while_blank(&mut self) -> usize {
-        // Since all characters we look for are ascii, we can directly use the byte API of str.
-        let mut i = 0;
-        while i < self.buffer.len() {
-            if !is_blank(self.buffer.as_bytes()[i] as char) {
-                break;
-            }
-            i += 1;
-        }
-        self.buffer = &self.buffer[i..];
-        i
-    }
-
     fn fetch_while_is_alpha(&mut self, out: &mut String) -> usize {
         let mut not_alpha = None;
 
@@ -383,15 +344,6 @@ impl<'a> Input for StrInput<'a> {
 /// [`bufmaxlen`]: `StrInput::bufmaxlen`
 /// [`buflen`]: `StrInput::buflen`
 const BUFFER_LEN: usize = 128;
-
-/// Extend the string by moving the start pointer to the left by `n` bytes.
-#[inline]
-unsafe fn extend_left(s: &str, n: usize) -> &str {
-    std::str::from_utf8_unchecked(std::slice::from_raw_parts(
-        s.as_ptr().wrapping_sub(n),
-        s.len() + n,
-    ))
-}
 
 /// Splits the first character of the given string and returns it along with the rest of the
 /// string.
