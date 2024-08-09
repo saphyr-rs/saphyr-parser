@@ -4,9 +4,7 @@ pub mod str;
 #[allow(clippy::module_name_repetitions)]
 pub use buffered::BufferedInput;
 
-use crate::char_traits::{
-    is_alpha, is_blank, is_blank_or_breakz, is_break, is_breakz, is_digit, is_flow, is_z,
-};
+use crate::char_traits::{is_blank_or_breakz, is_flow};
 
 /// Interface for a source of characters.
 ///
@@ -98,6 +96,25 @@ pub trait Input {
     #[must_use]
     fn peek(&self) -> char;
 
+    /// Return the next character, without consuming it.
+    ///
+    /// Users of the [`Input`] must make sure that the character has been loaded through a prior
+    /// call to [`Input::lookahead`]. Implementors of [`Input`] may assume that a valid call to
+    /// [`Input::lookahead`] has been made beforehand.
+    ///
+    /// # Return
+    ///
+    /// If the input source is not exhausted, returns the next character to be fed into the
+    /// scanner. Otherwise, returns `\0`.
+    ///
+    /// If the next character is not an ASCII character, the returned character is a non-ASCII
+    /// character that might not be the actual character found in the input (e.g., it might be
+    /// an UTF-8 byte casted to `char`).
+    #[must_use]
+    fn peek_ascii(&self) -> char {
+        self.peek()
+    }
+
     /// Return the `n`-th character in the buffer, without consuming it.
     ///
     /// This function assumes that the n-th character in the input has already been fetched through
@@ -114,16 +131,6 @@ pub trait Input {
     fn look_ch(&mut self) -> char {
         self.lookahead(1);
         self.peek()
-    }
-
-    /// Return whether the next character in the input source is equal to `c`.
-    ///
-    /// This function assumes that the next character in the input has already been fetched through
-    /// [`Input::lookahead`].
-    #[inline]
-    #[must_use]
-    fn next_char_is(&self, c: char) -> bool {
-        self.peek() == c
     }
 
     /// Return whether the `n`-th character in the input source is equal to `c`.
@@ -205,133 +212,5 @@ pub trait Input {
             c if in_flow && is_flow(c) => false,
             _ => true,
         }
-    }
-
-    /// Check whether the next character is [a blank] or [a break].
-    ///
-    /// The character must have previously been fetched through [`lookahead`]
-    ///
-    /// # Return
-    /// Returns true if the character is [a blank] or [a break], false otherwise.
-    ///
-    /// [`lookahead`]: Input::lookahead
-    /// [a blank]: is_blank
-    /// [a break]: is_break
-    #[inline]
-    fn next_is_blank_or_break(&self) -> bool {
-        is_blank(self.peek()) || is_break(self.peek())
-    }
-
-    /// Check whether the next character is [a blank] or [a breakz].
-    ///
-    /// The character must have previously been fetched through [`lookahead`]
-    ///
-    /// # Return
-    /// Returns true if the character is [a blank] or [a break], false otherwise.
-    ///
-    /// [`lookahead`]: Input::lookahead
-    /// [a blank]: is_blank
-    /// [a breakz]: is_breakz
-    #[inline]
-    fn next_is_blank_or_breakz(&self) -> bool {
-        is_blank(self.peek()) || is_breakz(self.peek())
-    }
-
-    /// Check whether the next character is [a blank].
-    ///
-    /// The character must have previously been fetched through [`lookahead`]
-    ///
-    /// # Return
-    /// Returns true if the character is [a blank], false otherwise.
-    ///
-    /// [`lookahead`]: Input::lookahead
-    /// [a blank]: is_blank
-    #[inline]
-    fn next_is_blank(&self) -> bool {
-        is_blank(self.peek())
-    }
-
-    /// Check whether the next character is [a break].
-    ///
-    /// The character must have previously been fetched through [`lookahead`]
-    ///
-    /// # Return
-    /// Returns true if the character is [a break], false otherwise.
-    ///
-    /// [`lookahead`]: Input::lookahead
-    /// [a break]: is_break
-    #[inline]
-    fn next_is_break(&self) -> bool {
-        is_break(self.peek())
-    }
-
-    /// Check whether the next character is [a breakz].
-    ///
-    /// The character must have previously been fetched through [`lookahead`]
-    ///
-    /// # Return
-    /// Returns true if the character is [a breakz], false otherwise.
-    ///
-    /// [`lookahead`]: Input::lookahead
-    /// [a breakz]: is_breakz
-    #[inline]
-    fn next_is_breakz(&self) -> bool {
-        is_breakz(self.peek())
-    }
-
-    /// Check whether the next character is [a z].
-    ///
-    /// The character must have previously been fetched through [`lookahead`]
-    ///
-    /// # Return
-    /// Returns true if the character is [a z], false otherwise.
-    ///
-    /// [`lookahead`]: Input::lookahead
-    /// [a z]: is_z
-    #[inline]
-    fn next_is_z(&self) -> bool {
-        is_z(self.peek())
-    }
-
-    /// Check whether the next character is [a flow].
-    ///
-    /// The character must have previously been fetched through [`lookahead`]
-    ///
-    /// # Return
-    /// Returns true if the character is [a flow], false otherwise.
-    ///
-    /// [`lookahead`]: Input::lookahead
-    /// [a flow]: is_flow
-    #[inline]
-    fn next_is_flow(&self) -> bool {
-        is_flow(self.peek())
-    }
-
-    /// Check whether the next character is [a digit].
-    ///
-    /// The character must have previously been fetched through [`lookahead`]
-    ///
-    /// # Return
-    /// Returns true if the character is [a digit], false otherwise.
-    ///
-    /// [`lookahead`]: Input::lookahead
-    /// [a digit]: is_digit
-    #[inline]
-    fn next_is_digit(&self) -> bool {
-        is_digit(self.peek())
-    }
-
-    /// Check whether the next character is [a letter].
-    ///
-    /// The character must have previously been fetched through [`lookahead`]
-    ///
-    /// # Return
-    /// Returns true if the character is [a letter], false otherwise.
-    ///
-    /// [`lookahead`]: Input::lookahead
-    /// [a letter]: is_alpha
-    #[inline]
-    fn next_is_alpha(&self) -> bool {
-        is_alpha(self.peek())
     }
 }

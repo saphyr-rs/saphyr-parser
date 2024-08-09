@@ -14,7 +14,7 @@ use std::{char, collections::VecDeque, error::Error, fmt};
 use crate::{
     char_traits::{
         as_hex, is_alpha, is_anchor_char, is_blank, is_blank_or_breakz, is_break, is_breakz,
-        is_flow, is_hex, is_tag_char, is_uri_char,
+        is_digit, is_flow, is_hex, is_tag_char, is_uri_char, is_z,
     },
     input::Input,
 };
@@ -571,7 +571,7 @@ impl<T: Input> Scanner<T> {
             // will be reset by `skip_nl`.
             self.skip_blank();
             self.skip_nl();
-        } else if self.input.next_is_break() {
+        } else if self.next_is_break() {
             self.skip_nl();
         }
     }
@@ -586,6 +586,80 @@ impl<T: Input> Scanner<T> {
         let n_chars = self.input.skip_until(is_breakz);
         self.mark.index += n_chars;
         self.mark.col += n_chars;
+    }
+
+    /// Check whether the next character is a blank.
+    ///
+    /// The character must have previously been fetched through [`Input::lookahead`].
+    #[inline]
+    fn next_is_blank(&self) -> bool {
+        is_blank(self.input.peek_ascii())
+    }
+
+    /// Check whether the next character is a break.
+    ///
+    /// The character must have previously been fetched through [`Input::lookahead`].
+    #[inline]
+    fn next_is_break(&self) -> bool {
+        is_break(self.input.peek_ascii())
+    }
+
+    /// Check whether the next character is a breakz.
+    ///
+    /// The character must have previously been fetched through [`Input::lookahead`].
+    #[inline]
+    fn next_is_breakz(&self) -> bool {
+        is_breakz(self.input.peek_ascii())
+    }
+
+    /// Check whether the next character is a z.
+    ///
+    /// The character must have previously been fetched through [`Input::lookahead`].
+    #[inline]
+    fn next_is_z(&self) -> bool {
+        is_z(self.input.peek_ascii())
+    }
+
+    /// Check whether the next character is a blank or a break.
+    ///
+    /// The character must have previously been fetched through [`Input::lookahead`].
+    #[inline]
+    fn next_is_blank_or_break(&self) -> bool {
+        let c = self.input.peek_ascii();
+        is_blank(c) || is_break(c)
+    }
+
+    /// Check whether the next character is a blank or a breakz.
+    ///
+    /// The character must have previously been fetched through [`Input::lookahead`].
+    #[inline]
+    fn next_is_blank_or_breakz(&self) -> bool {
+        let c = self.input.peek_ascii();
+        is_blank_or_breakz(c)
+    }
+
+    /// Check whether the next character is a flow.
+    ///
+    /// The character must have previously been fetched through [`Input::lookahead`].
+    #[inline]
+    fn next_is_flow(&self) -> bool {
+        is_flow(self.input.peek_ascii())
+    }
+
+    /// Check whether the next character is a digit.
+    ///
+    /// The character must have previously been fetched through [`Input::lookahead`].
+    #[inline]
+    fn next_is_digit(&self) -> bool {
+        is_digit(self.input.peek_ascii())
+    }
+
+    /// Check whether the next character is a letter.
+    ///
+    /// The character must have previously been fetched through [`Input::lookahead`].
+    #[inline]
+    fn next_is_alpha(&self) -> bool {
+        is_alpha(self.input.peek_ascii())
     }
 
     /// Return whether the [`TokenType::StreamStart`] event has been emitted.
@@ -674,20 +748,20 @@ impl<T: Input> Scanner<T> {
 
         self.input.lookahead(4);
 
-        if self.input.next_is_z() {
+        if self.next_is_z() {
             self.fetch_stream_end()?;
             return Ok(());
         }
 
         if self.mark.col == 0 {
-            if self.input.next_char_is('%') {
+            if self.input.peek_ascii() == '%' {
                 return self.fetch_directive();
             } else if self.input.next_is_document_start() {
                 return self.fetch_document_indicator(TokenType::DocumentStart);
             } else if self.input.next_is_document_end() {
                 self.fetch_document_indicator(TokenType::DocumentEnd)?;
                 self.skip_ws_to_eol(SkipTabs::Yes)?;
-                if !self.input.next_is_breakz() {
+                if !self.next_is_breakz() {
                     return Err(ScanError::new_str(
                         self.mark,
                         "invalid content after document end marker",
@@ -842,7 +916,7 @@ impl<T: Input> Scanner<T> {
                 {
                     self.skip_ws_to_eol(SkipTabs::Yes)?;
                     // If we have content on that line with a tab, return an error.
-                    if !self.input.next_is_breakz() {
+                    if !self.next_is_breakz() {
                         return Err(ScanError::new_str(
                             self.mark,
                             "tabs disallowed within this context (block indentation)",
@@ -1010,7 +1084,7 @@ impl<T: Input> Scanner<T> {
 
         self.skip_ws_to_eol(SkipTabs::Yes)?;
 
-        if self.input.next_is_breakz() {
+        if self.next_is_breakz() {
             self.input.lookahead(2);
             self.skip_linebreak();
             Ok(tok)
@@ -1101,7 +1175,7 @@ impl<T: Input> Scanner<T> {
 
         self.input.lookahead(1);
 
-        if self.input.next_is_blank_or_breakz() {
+        if self.next_is_blank_or_breakz() {
             Ok(Token(
                 Span::new(*mark, self.mark),
                 TokenType::TagDirective(handle, prefix),
@@ -1154,8 +1228,7 @@ impl<T: Input> Scanner<T> {
             }
         }
 
-        if is_blank_or_breakz(self.input.look_ch())
-            || (self.flow_level > 0 && self.input.next_is_flow())
+        if is_blank_or_breakz(self.input.look_ch()) || (self.flow_level > 0 && self.next_is_flow())
         {
             // XXX: ex 7.2, an empty scalar can follow a secondary tag
             Ok(Token(
@@ -1528,7 +1601,9 @@ impl<T: Input> Scanner<T> {
         self.roll_indent(mark.col, None, TokenType::BlockSequenceStart, mark);
         let found_tabs = self.skip_ws_to_eol(SkipTabs::Yes)?.found_tabs();
         self.input.lookahead(2);
-        if found_tabs && self.input.next_char_is('-') && is_blank_or_breakz(self.input.peek_nth(1))
+        if found_tabs
+            && self.input.peek_ascii() == '-'
+            && is_blank_or_breakz(self.input.peek_nth(1))
         {
             return Err(ScanError::new_str(
                 self.mark,
@@ -1538,7 +1613,7 @@ impl<T: Input> Scanner<T> {
 
         self.skip_ws_to_eol(SkipTabs::No)?;
         self.input.lookahead(1);
-        if self.input.next_is_break() || self.input.next_is_flow() {
+        if self.next_is_break() || self.next_is_flow() {
             self.roll_one_col_indent();
         }
 
@@ -1604,7 +1679,7 @@ impl<T: Input> Scanner<T> {
             }
             self.skip_non_blank();
             self.input.lookahead(1);
-            if self.input.next_is_digit() {
+            if self.next_is_digit() {
                 if self.input.peek() == '0' {
                     return Err(ScanError::new_str(
                         start_mark,
@@ -1614,7 +1689,7 @@ impl<T: Input> Scanner<T> {
                 increment = (self.input.peek() as usize) - ('0' as usize);
                 self.skip_non_blank();
             }
-        } else if self.input.next_is_digit() {
+        } else if self.next_is_digit() {
             if self.input.peek() == '0' {
                 return Err(ScanError::new_str(
                     start_mark,
@@ -1639,14 +1714,14 @@ impl<T: Input> Scanner<T> {
 
         // Check if we are at the end of the line.
         self.input.lookahead(1);
-        if !self.input.next_is_breakz() {
+        if !self.next_is_breakz() {
             return Err(ScanError::new_str(
                 start_mark,
                 "while scanning a block scalar, did not find expected comment or line break",
             ));
         }
 
-        if self.input.next_is_break() {
+        if self.next_is_break() {
             self.input.lookahead(2);
             self.read_break(&mut chomping_break);
         }
@@ -1677,7 +1752,7 @@ impl<T: Input> Scanner<T> {
         // ```yaml
         // - |+
         // ```
-        if self.input.next_is_z() {
+        if self.next_is_z() {
             let contents = match chomping {
                 // We strip trailing linebreaks. Nothing remain.
                 Chomping::Strip => String::new(),
@@ -1706,7 +1781,7 @@ impl<T: Input> Scanner<T> {
         }
 
         let start_mark = self.mark;
-        while self.mark.col == indent && !self.input.next_is_z() {
+        while self.mark.col == indent && !self.next_is_z() {
             if indent == 0 {
                 self.input.lookahead(4);
                 if self.input.next_is_document_end() {
@@ -1715,7 +1790,7 @@ impl<T: Input> Scanner<T> {
             }
 
             // We are at the first content character of a content line.
-            trailing_blank = self.input.next_is_blank();
+            trailing_blank = self.next_is_blank();
             if !literal && !leading_break.is_empty() && !leading_blank && !trailing_blank {
                 string.push_str(&trailing_breaks);
                 if trailing_breaks.is_empty() {
@@ -1729,12 +1804,12 @@ impl<T: Input> Scanner<T> {
             leading_break.clear();
             trailing_breaks.clear();
 
-            leading_blank = self.input.next_is_blank();
+            leading_blank = self.next_is_blank();
 
             self.scan_block_scalar_content_line(&mut string);
 
             // break on EOF
-            if self.input.next_is_z() {
+            if self.next_is_z() {
                 break;
             }
 
@@ -1751,7 +1826,7 @@ impl<T: Input> Scanner<T> {
             // If we had reached an eof but the last character wasn't an end-of-line, check if the
             // last line was indented at least as the rest of the scalar, then we need to consider
             // there is a newline.
-            if self.input.next_is_z() && self.mark.col >= indent.max(1) {
+            if self.next_is_z() && self.mark.col >= indent.max(1) {
                 string.push('\n');
             }
         }
@@ -1814,7 +1889,7 @@ impl<T: Input> Scanner<T> {
             }
 
             // If our current line is empty, skip over the break and continue looping.
-            if self.input.next_is_break() {
+            if self.next_is_break() {
                 self.read_break(breaks);
             } else {
                 // Otherwise, we have a content line. Return control.
@@ -1839,7 +1914,7 @@ impl<T: Input> Scanner<T> {
                 max_indent = self.mark.col;
             }
 
-            if self.input.next_is_break() {
+            if self.next_is_break() {
                 // If our current line is empty, skip over the break and continue looping.
                 self.input.lookahead(2);
                 self.read_break(breaks);
@@ -1902,7 +1977,7 @@ impl<T: Input> Scanner<T> {
                 ));
             }
 
-            if self.input.next_is_z() {
+            if self.next_is_z() {
                 return Err(ScanError::new_str(
                     start_mark,
                     "while scanning a quoted scalar, found unexpected end of stream",
@@ -1931,8 +2006,8 @@ impl<T: Input> Scanner<T> {
             }
 
             // Consume blank characters.
-            while self.input.next_is_blank() || self.input.next_is_break() {
-                if self.input.next_is_blank() {
+            while self.next_is_blank_or_break() {
+                if self.next_is_blank() {
                     // Consume a space or a tab character.
                     if leading_blanks {
                         if self.input.peek() == '\t' && (self.mark.col as isize) < self.indent {
@@ -2184,7 +2259,7 @@ impl<T: Input> Scanner<T> {
                 ));
             }
 
-            if !self.input.next_is_blank_or_breakz()
+            if !self.next_is_blank_or_breakz()
                 && self.input.next_can_be_plain_scalar(self.flow_level > 0)
             {
                 if self.leading_whitespace {
@@ -2221,7 +2296,7 @@ impl<T: Input> Scanner<T> {
                     // hence the `for` loop looping `self.input.bufmaxlen() - 1` times.
                     self.input.lookahead(self.input.bufmaxlen());
                     for _ in 0..self.input.bufmaxlen() - 1 {
-                        if self.input.next_is_blank_or_breakz()
+                        if self.next_is_blank_or_breakz()
                             || !self.input.next_can_be_plain_scalar(self.flow_level > 0)
                         {
                             end = true;
@@ -2239,14 +2314,14 @@ impl<T: Input> Scanner<T> {
             //  - We reach eof
             //  - We reach ": "
             //  - We find a flow character in a flow context
-            if !(self.input.next_is_blank() || self.input.next_is_break()) {
+            if !self.next_is_blank_or_break() {
                 break;
             }
 
             // Process blank characters.
             self.input.lookahead(1);
-            while self.input.next_is_blank_or_break() {
-                if self.input.next_is_blank() {
+            while self.next_is_blank_or_break() {
+                if self.next_is_blank() {
                     if !self.leading_whitespace {
                         self.buf_whitespaces.push(self.input.peek());
                         self.skip_blank();
@@ -2254,7 +2329,7 @@ impl<T: Input> Scanner<T> {
                         // Tabs in an indentation columns are allowed if and only if the line is
                         // empty. Skip to the end of the line.
                         self.skip_ws_to_eol(SkipTabs::Yes)?;
-                        if !self.input.next_is_breakz() {
+                        if !self.next_is_breakz() {
                             return Err(ScanError::new_str(
                                 start_mark,
                                 "while scanning a plain scalar, found a tab",
@@ -2380,7 +2455,7 @@ impl<T: Input> Scanner<T> {
         self.skip_non_blank();
         if self.input.look_ch() == '\t'
             && !self.skip_ws_to_eol(SkipTabs::Yes)?.has_valid_yaml_ws()
-            && (self.input.peek() == '-' || self.input.next_is_alpha())
+            && (self.input.peek_ascii() == '-' || self.next_is_alpha())
         {
             return Err(ScanError::new_str(
                 self.mark,

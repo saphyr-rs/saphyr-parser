@@ -1,7 +1,5 @@
 use crate::{
-    char_traits::{
-        is_alpha, is_blank, is_blank_or_breakz, is_break, is_breakz, is_digit, is_flow, is_z,
-    },
+    char_traits::{is_blank_or_breakz, is_flow},
     input::Input,
 };
 
@@ -139,6 +137,11 @@ impl<'a> Input for StrInput<'a> {
     }
 
     #[inline]
+    fn peek_ascii(&self) -> char {
+        self.buffer.as_bytes().first().map_or('\0', |&c| c.into())
+    }
+
+    #[inline]
     fn peek_nth(&self, n: usize) -> char {
         let mut chars = self.buffer.chars();
         for _ in 0..n {
@@ -153,11 +156,6 @@ impl<'a> Input for StrInput<'a> {
     fn look_ch(&mut self) -> char {
         self.lookahead(1);
         self.peek()
-    }
-
-    #[inline]
-    fn next_char_is(&self, c: char) -> bool {
-        self.peek() == c
     }
 
     #[inline]
@@ -241,55 +239,6 @@ impl<'a> Input for StrInput<'a> {
                 _ => true,
             }
         }
-    }
-
-    #[inline]
-    fn next_is_blank_or_break(&self) -> bool {
-        !self.buffer.is_empty()
-            && (is_blank(self.buffer.as_bytes()[0] as char)
-                || is_break(self.buffer.as_bytes()[0] as char))
-    }
-
-    #[inline]
-    fn next_is_blank_or_breakz(&self) -> bool {
-        self.buffer.is_empty()
-            || (is_blank(self.buffer.as_bytes()[0] as char)
-                || is_breakz(self.buffer.as_bytes()[0] as char))
-    }
-
-    #[inline]
-    fn next_is_blank(&self) -> bool {
-        !self.buffer.is_empty() && is_blank(self.buffer.as_bytes()[0] as char)
-    }
-
-    #[inline]
-    fn next_is_break(&self) -> bool {
-        !self.buffer.is_empty() && is_break(self.buffer.as_bytes()[0] as char)
-    }
-
-    #[inline]
-    fn next_is_breakz(&self) -> bool {
-        self.buffer.is_empty() || is_breakz(self.buffer.as_bytes()[0] as char)
-    }
-
-    #[inline]
-    fn next_is_z(&self) -> bool {
-        self.buffer.is_empty() || is_z(self.buffer.as_bytes()[0] as char)
-    }
-
-    #[inline]
-    fn next_is_flow(&self) -> bool {
-        !self.buffer.is_empty() && is_flow(self.buffer.as_bytes()[0] as char)
-    }
-
-    #[inline]
-    fn next_is_digit(&self) -> bool {
-        !self.buffer.is_empty() && is_digit(self.buffer.as_bytes()[0] as char)
-    }
-
-    #[inline]
-    fn next_is_alpha(&self) -> bool {
-        !self.buffer.is_empty() && is_alpha(self.buffer.as_bytes()[0] as char)
     }
 }
 
