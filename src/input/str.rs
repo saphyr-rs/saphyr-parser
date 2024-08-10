@@ -153,6 +153,11 @@ impl<'a> Input for StrInput<'a> {
     }
 
     #[inline]
+    fn peek_nth_ascii(&self, n: usize) -> char {
+        self.buffer.as_bytes().get(n).map_or('\0', |&c| c.into())
+    }
+
+    #[inline]
     fn look_ch(&mut self) -> char {
         self.lookahead(1);
         self.peek()
@@ -167,56 +172,6 @@ impl<'a> Input for StrInput<'a> {
     fn next_2_are(&self, c1: char, c2: char) -> bool {
         let mut chars = self.buffer.chars();
         chars.next().is_some_and(|c| c == c1) && chars.next().is_some_and(|c| c == c2)
-    }
-
-    #[inline]
-    fn next_3_are(&self, c1: char, c2: char, c3: char) -> bool {
-        let mut chars = self.buffer.chars();
-        chars.next().is_some_and(|c| c == c1)
-            && chars.next().is_some_and(|c| c == c2)
-            && chars.next().is_some_and(|c| c == c3)
-    }
-
-    #[inline]
-    fn next_is_document_indicator(&self) -> bool {
-        if self.buffer.len() < 3 {
-            false
-        } else {
-            // Since all characters we look for are ascii, we can directly use the byte API of str.
-            let bytes = self.buffer.as_bytes();
-            (bytes.len() == 3 || is_blank_or_breakz(bytes[3] as char))
-                && (bytes[0] == b'.' || bytes[0] == b'-')
-                && bytes[0] == bytes[1]
-                && bytes[1] == bytes[2]
-        }
-    }
-
-    #[inline]
-    fn next_is_document_start(&self) -> bool {
-        if self.buffer.len() < 3 {
-            false
-        } else {
-            // Since all characters we look for are ascii, we can directly use the byte API of str.
-            let bytes = self.buffer.as_bytes();
-            (bytes.len() == 3 || is_blank_or_breakz(bytes[3] as char))
-                && bytes[0] == b'-'
-                && bytes[1] == b'-'
-                && bytes[2] == b'-'
-        }
-    }
-
-    #[inline]
-    fn next_is_document_end(&self) -> bool {
-        if self.buffer.len() < 3 {
-            false
-        } else {
-            // Since all characters we look for are ascii, we can directly use the byte API of str.
-            let bytes = self.buffer.as_bytes();
-            (bytes.len() == 3 || is_blank_or_breakz(bytes[3] as char))
-                && bytes[0] == b'.'
-                && bytes[1] == b'.'
-                && bytes[2] == b'.'
-        }
     }
 
     #[allow(clippy::inline_always)]
@@ -273,43 +228,4 @@ fn split_first_char(s: &str) -> Option<(char, &str)> {
     let mut iter = s.chars();
     let c = iter.next()?;
     Some((c, iter.as_str()))
-}
-
-#[cfg(test)]
-mod test {
-    use crate::input::Input;
-
-    use super::StrInput;
-
-    #[test]
-    pub fn is_document_start() {
-        let input = StrInput::new("---\n");
-        assert!(input.next_is_document_start());
-        assert!(input.next_is_document_indicator());
-        let input = StrInput::new("---");
-        assert!(input.next_is_document_start());
-        assert!(input.next_is_document_indicator());
-        let input = StrInput::new("...\n");
-        assert!(!input.next_is_document_start());
-        assert!(input.next_is_document_indicator());
-        let input = StrInput::new("--- ");
-        assert!(input.next_is_document_start());
-        assert!(input.next_is_document_indicator());
-    }
-
-    #[test]
-    pub fn is_document_end() {
-        let input = StrInput::new("...\n");
-        assert!(input.next_is_document_end());
-        assert!(input.next_is_document_indicator());
-        let input = StrInput::new("...");
-        assert!(input.next_is_document_end());
-        assert!(input.next_is_document_indicator());
-        let input = StrInput::new("---\n");
-        assert!(!input.next_is_document_end());
-        assert!(input.next_is_document_indicator());
-        let input = StrInput::new("... ");
-        assert!(input.next_is_document_end());
-        assert!(input.next_is_document_indicator());
-    }
 }

@@ -662,6 +662,43 @@ impl<T: Input> Scanner<T> {
         is_alpha(self.input.peek_ascii())
     }
 
+    /// Check whether the next characters correspond to a start of document.
+    ///
+    /// This function assumes that the next 4 characters in the input has already been fetched
+    /// through [`Input::lookahead`].
+    #[inline]
+    fn next_is_document_start(&self) -> bool {
+        self.input.peek_ascii() == '-'
+            && self.input.peek_nth_ascii(1) == '-'
+            && self.input.peek_nth_ascii(2) == '-'
+            && is_blank_or_breakz(self.input.peek_nth_ascii(3))
+    }
+
+    /// Check whether the next characters correspond to a document indicator.
+    ///
+    /// This function assumes that the next 4 characters in the input has already been fetched
+    /// through [`Input::lookahead`].
+    #[inline]
+    fn next_is_document_indicator(&self) -> bool {
+        let first_ch = self.input.peek_ascii();
+        (first_ch == '-' || first_ch == '.')
+            && self.input.peek_nth_ascii(1) == first_ch
+            && self.input.peek_nth_ascii(2) == first_ch
+            && is_blank_or_breakz(self.input.peek_nth_ascii(3))
+    }
+
+    /// Check whether the next characters correspond to an end of document.
+    ///
+    /// This function assumes that the next 4 characters in the input has already been fetched
+    /// through [`Input::lookahead`].
+    #[inline]
+    fn next_is_document_end(&self) -> bool {
+        self.input.peek_ascii() == '.'
+            && self.input.peek_nth_ascii(1) == '.'
+            && self.input.peek_nth_ascii(2) == '.'
+            && is_blank_or_breakz(self.input.peek_nth_ascii(3))
+    }
+
     /// Return whether the [`TokenType::StreamStart`] event has been emitted.
     #[inline]
     pub fn stream_started(&self) -> bool {
@@ -756,9 +793,9 @@ impl<T: Input> Scanner<T> {
         if self.mark.col == 0 {
             if self.input.peek_ascii() == '%' {
                 return self.fetch_directive();
-            } else if self.input.next_is_document_start() {
+            } else if self.next_is_document_start() {
                 return self.fetch_document_indicator(TokenType::DocumentStart);
-            } else if self.input.next_is_document_end() {
+            } else if self.next_is_document_end() {
                 self.fetch_document_indicator(TokenType::DocumentEnd)?;
                 self.skip_ws_to_eol(SkipTabs::Yes)?;
                 if !self.next_is_breakz() {
@@ -1784,7 +1821,7 @@ impl<T: Input> Scanner<T> {
         while self.mark.col == indent && !self.next_is_z() {
             if indent == 0 {
                 self.input.lookahead(4);
-                if self.input.next_is_document_end() {
+                if self.next_is_document_end() {
                     break;
                 }
             }
@@ -1970,7 +2007,7 @@ impl<T: Input> Scanner<T> {
             /* Check for a document indicator. */
             self.input.lookahead(4);
 
-            if self.mark.col == 0 && self.input.next_is_document_indicator() {
+            if self.mark.col == 0 && self.next_is_document_indicator() {
                 return Err(ScanError::new_str(
                     start_mark,
                     "while scanning a quoted scalar, found unexpected document indicator",
@@ -2248,7 +2285,7 @@ impl<T: Input> Scanner<T> {
 
         loop {
             self.input.lookahead(4);
-            if self.input.next_is_document_indicator() || self.input.peek() == '#' {
+            if self.next_is_document_indicator() || self.input.peek() == '#' {
                 break;
             }
 

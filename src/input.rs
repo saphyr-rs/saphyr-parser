@@ -111,8 +111,23 @@ pub trait Input {
     /// character that might not be the actual character found in the input (e.g., it might be
     /// an UTF-8 byte casted to `char`).
     #[must_use]
+    #[inline]
     fn peek_ascii(&self) -> char {
         self.peek()
+    }
+
+    /// Return the `n`-th character in the buffer, without consuming it.
+    ///
+    /// This function assumes that the n-th character in the input has already been fetched through
+    /// [`Input::lookahead`] and all non-consumed characters before the `n`-th are ASCII.
+    ///
+    /// If the `n`-th character is not ASCII, the returned character is a non-ASCII character that
+    /// might not be the actual character found in the input (e.g., it might be an UTF-8 byte casted
+    /// to `char`).
+    #[must_use]
+    #[inline]
+    fn peek_nth_ascii(&self, n: usize) -> char {
+        self.peek_nth(n)
     }
 
     /// Return the `n`-th character in the buffer, without consuming it.
@@ -152,51 +167,6 @@ pub trait Input {
     fn next_2_are(&self, c1: char, c2: char) -> bool {
         assert!(self.buflen() >= 2);
         self.peek() == c1 && self.peek_nth(1) == c2
-    }
-
-    /// Return whether the next 3 characters in the input source match the given characters.
-    ///
-    /// This function assumes that the next 3 characters in the input have already been fetched
-    /// through [`Input::lookahead`].
-    #[inline]
-    #[must_use]
-    fn next_3_are(&self, c1: char, c2: char, c3: char) -> bool {
-        assert!(self.buflen() >= 3);
-        self.peek() == c1 && self.peek_nth(1) == c2 && self.peek_nth(2) == c3
-    }
-
-    /// Check whether the next characters correspond to a document indicator.
-    ///
-    /// This function assumes that the next 4 characters in the input has already been fetched
-    /// through [`Input::lookahead`].
-    #[inline]
-    #[must_use]
-    fn next_is_document_indicator(&self) -> bool {
-        assert!(self.buflen() >= 4);
-        is_blank_or_breakz(self.peek_nth(3))
-            && (self.next_3_are('.', '.', '.') || self.next_3_are('-', '-', '-'))
-    }
-
-    /// Check whether the next characters correspond to a start of document.
-    ///
-    /// This function assumes that the next 4 characters in the input has already been fetched
-    /// through [`Input::lookahead`].
-    #[inline]
-    #[must_use]
-    fn next_is_document_start(&self) -> bool {
-        assert!(self.buflen() >= 4);
-        self.next_3_are('-', '-', '-') && is_blank_or_breakz(self.peek_nth(3))
-    }
-
-    /// Check whether the next characters correspond to an end of document.
-    ///
-    /// This function assumes that the next 4 characters in the input has already been fetched
-    /// through [`Input::lookahead`].
-    #[inline]
-    #[must_use]
-    fn next_is_document_end(&self) -> bool {
-        assert!(self.buflen() >= 4);
-        self.next_3_are('.', '.', '.') && is_blank_or_breakz(self.peek_nth(3))
     }
 
     /// Check whether the next characters may be part of a plain scalar.
