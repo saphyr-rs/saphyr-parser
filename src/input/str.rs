@@ -1,7 +1,4 @@
-use crate::{
-    char_traits::{is_blank_or_breakz, is_flow},
-    input::Input,
-};
+use crate::input::Input;
 
 #[allow(clippy::module_name_repetitions)]
 pub struct StrInput<'a> {
@@ -172,28 +169,6 @@ impl<'a> Input for StrInput<'a> {
     fn next_2_are(&self, c1: char, c2: char) -> bool {
         let mut chars = self.buffer.chars();
         chars.next().is_some_and(|c| c == c1) && chars.next().is_some_and(|c| c == c2)
-    }
-
-    #[allow(clippy::inline_always)]
-    #[inline(always)]
-    fn next_can_be_plain_scalar(&self, in_flow: bool) -> bool {
-        let c = self.buffer.as_bytes()[0];
-        if self.buffer.len() > 1 {
-            let nc = self.buffer.as_bytes()[1];
-            match c {
-                // indicators can end a plain scalar, see 7.3.3. Plain Style
-                b':' if is_blank_or_breakz(nc as char) || (in_flow && is_flow(nc as char)) => false,
-                c if in_flow && is_flow(c as char) => false,
-                _ => true,
-            }
-        } else {
-            match c {
-                // indicators can end a plain scalar, see 7.3.3. Plain Style
-                b':' => false,
-                c if in_flow && is_flow(c as char) => false,
-                _ => true,
-            }
-        }
     }
 }
 

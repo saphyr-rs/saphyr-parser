@@ -699,6 +699,21 @@ impl<T: Input> Scanner<T> {
             && is_blank_or_breakz(self.input.peek_nth_ascii(3))
     }
 
+    /// Check whether the next characters may be part of a plain scalar.
+    ///
+    /// This function assumes we are not given a blankz character.
+    fn next_can_be_plain_scalar(&self, in_flow: bool) -> bool {
+        match self.input.peek_ascii() {
+            // indicators can end a plain scalar, see 7.3.3. Plain Style
+            ':' => {
+                let nc = self.input.peek_nth_ascii(1);
+                !(is_blank_or_breakz(nc) || (in_flow && is_flow(nc)))
+            }
+            c if in_flow && is_flow(c) => false,
+            _ => true,
+        }
+    }
+
     /// Return whether the [`TokenType::StreamStart`] event has been emitted.
     #[inline]
     pub fn stream_started(&self) -> bool {
@@ -2296,8 +2311,7 @@ impl<T: Input> Scanner<T> {
                 ));
             }
 
-            if !self.next_is_blank_or_breakz()
-                && self.input.next_can_be_plain_scalar(self.flow_level > 0)
+            if !self.next_is_blank_or_breakz() && self.next_can_be_plain_scalar(self.flow_level > 0)
             {
                 if self.leading_whitespace {
                     if self.buf_leading_break.is_empty() {
@@ -2334,7 +2348,7 @@ impl<T: Input> Scanner<T> {
                     self.input.lookahead(self.input.bufmaxlen());
                     for _ in 0..self.input.bufmaxlen() - 1 {
                         if self.next_is_blank_or_breakz()
-                            || !self.input.next_can_be_plain_scalar(self.flow_level > 0)
+                            || !self.next_can_be_plain_scalar(self.flow_level > 0)
                         {
                             end = true;
                             break;
