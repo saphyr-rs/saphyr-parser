@@ -3,7 +3,7 @@ use std::fs::{self, DirEntry};
 use libtest_mimic::{run_tests, Arguments, Outcome, Test};
 
 use saphyr::{yaml, Yaml, YamlLoader};
-use saphyr_parser::{Event, EventReceiver, Parser, ScanError, TScalarStyle, Tag};
+use saphyr_parser::{Event, Parser, ScanError, Span, SpannedEventReceiver, TScalarStyle, Tag};
 
 type Result<T, E = Box<dyn std::error::Error>> = std::result::Result<T, E>;
 
@@ -34,14 +34,25 @@ fn main() -> Result<()> {
 
 fn run_yaml_test(test: &Test<YamlTest>) -> Outcome {
     let desc = &test.data;
-    let actual_events = parse_to_events(&desc.yaml);
-    let events_diff = actual_events.map(|events| events_differ(&events, &desc.expected_events));
+    let reporter = parse_to_events(&desc.yaml);
+    let actual_events = reporter.as_ref().map(|reporter| &reporter.events);
+    let events_diff = actual_events.map(|events| events_differ(events, &desc.expected_events));
     let mut error_text = match (&events_diff, desc.expected_error) {
         (Ok(x), true) => Some(format!("no error when expected: {x:#?}")),
         (Err(_), true) | (Ok(None), false) => None,
         (Err(e), false) => Some(format!("unexpected error {e:?}")),
         (Ok(Some(diff)), false) => Some(format!("events differ: {diff}")),
     };
+
+    if let Some(span_error) = reporter
+        .as_ref()
+        .ok()
+        .and_then(|reporter| reporter.span_failures.first())
+    {
+        return Outcome::Failed {
+            msg: Some(span_error.clone()),
+        };
+    }
 
     // Show a caret on error.
     if let Some(text) = &mut error_text {
@@ -118,26 +129,35 @@ fn load_tests_from_file(entry: &DirEntry) -> Result<Vec<Test<YamlTest>>> {
     Ok(result)
 }
 
-fn parse_to_events(source: &str) -> Result<Vec<String>, ScanError> {
-    let mut reporter = EventReporter::new();
+fn parse_to_events(source: &str) -> Result<EventReporter, ScanError> {
+    let mut reporter = EventReporter::default();
     for x in Parser::new_from_str(source) {
-        reporter.on_event(x?.0);
+        let x = x?;
+        reporter.on_event(x.0, x.1);
     }
-    Ok(reporter.events)
+    Ok(reporter)
 }
 
-struct EventReporter {
-    events: Vec<String>,
+#[derive(Default)]
+pub struct EventReporter {
+    pub events: Vec<String>,
+    last_span: Option<(Event, Span)>,
+    pub span_failures: Vec<String>,
 }
 
-impl EventReporter {
-    fn new() -> Self {
-        Self { events: vec![] }
-    }
-}
+impl SpannedEventReceiver for EventReporter {
+    fn on_event(&mut self, ev: Event, span: Span) {
+        if let Some((last_ev, last_span)) = self.last_span.take() {
+            if span.start.index() < last_span.start.index()
+                || span.end.index() < last_span.end.index()
+            {
+                self.span_failures.push(format!(
+                    "event {ev:?}@{span:?} came before event {last_ev:?}@{last_span:?}"
+                ));
+            }
+        }
+        self.last_span = Some((ev.clone(), span));
 
-impl EventReceiver for EventReporter {
-    fn on_event(&mut self, ev: Event) {
         let line: String = match ev {
             Event::StreamStart => "+STR".into(),
             Event::StreamEnd => "-STR".into(),
