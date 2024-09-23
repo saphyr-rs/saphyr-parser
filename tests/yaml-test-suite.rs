@@ -139,6 +139,7 @@ fn parse_to_events(source: &str) -> Result<EventReporter, ScanError> {
 }
 
 #[derive(Default)]
+/// A [`SpannedEventReceiver`] checking for inconsistencies in event [`Spans`].
 pub struct EventReporter {
     pub events: Vec<String>,
     last_span: Option<(Event, Span)>,
