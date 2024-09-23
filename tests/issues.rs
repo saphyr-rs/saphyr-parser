@@ -171,11 +171,11 @@ fn test_issue1() {
 fn test_pr12() {
     struct Recv {}
     impl SpannedEventReceiver for Recv {
-        fn on_event(&mut self, ev: Event, span: saphyr_parser::Span) {}
+        fn on_event(&mut self, _ev: Event, _span: saphyr_parser::Span) {}
     }
     let s = "---\n- |\n  a";
     let input = BufferedInput::new(s.chars());
     let mut parser = Parser::new(input);
     let mut recv = Recv {};
-    parser.load(&mut recv, true);
+    parser.load(&mut recv, true).unwrap();
 }
