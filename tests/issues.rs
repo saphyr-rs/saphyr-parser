@@ -1,4 +1,4 @@
-use saphyr_parser::{Event, Parser, ScanError, TScalarStyle};
+use saphyr_parser::{BufferedInput, Event, Parser, ScanError, SpannedEventReceiver, TScalarStyle};
 
 /// Run the parser through the string.
 ///
@@ -165,4 +165,17 @@ fn test_issue1() {
             Event::StreamEnd,
         ]
     );
+}
+
+#[test]
+fn test_pr12() {
+    struct Recv {}
+    impl SpannedEventReceiver for Recv {
+        fn on_event(&mut self, ev: Event, span: saphyr_parser::Span) {}
+    }
+    let s = "---\n- |\n  a";
+    let input = BufferedInput::new(s.chars());
+    let mut parser = Parser::new(input);
+    let mut recv = Recv {};
+    parser.load(&mut recv, true);
 }
