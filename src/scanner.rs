@@ -760,9 +760,15 @@ impl<T: Input> Scanner<T> {
     /// Returns `ScanError` when loading fails.
     pub fn fetch_more_tokens(&mut self) -> ScanResult {
         let mut need_more;
+        let mut old_mark = None;
         loop {
             if self.tokens.is_empty() {
                 need_more = true;
+            } else if old_mark == Some(self.mark()) {
+                // If we looked ahead one token because we were checking for a
+                // key but looking ahead failed to consume any input, don't look
+                // ahead any more (it could put us in an infinite loop).
+                need_more = false;
             } else {
                 need_more = false;
                 // Stale potential keys that we know won't be keys.
@@ -771,6 +777,7 @@ impl<T: Input> Scanner<T> {
                 for sk in &self.simple_keys {
                     if sk.possible && sk.token_number == self.tokens_parsed {
                         need_more = true;
+                        old_mark = Some(self.mark());
                         break;
                     }
                 }
